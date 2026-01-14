@@ -1,0 +1,12 @@
+{
+  "domain": "owncloud_backup",
+  "name": "ownCloud Backup (WebDAV)",
+  "version": "0.1.0-alpha",
+  "documentation": "https://github.com/your-org/owncloud-backup-ha",
+  "issue_tracker": "https://github.com/your-org/owncloud-backup-ha/issues",
+  "codeowners": [],
+  "config_flow": true,
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "requirements": []
+}
