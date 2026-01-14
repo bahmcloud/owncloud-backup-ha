@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project adheres to Semantic Versioning.
 
+## [0.1.1-alpha] - 2026-01-14
+### Fixed
+- Improved upload reliability by spooling backup streams to a temporary file and uploading with Content-Length (avoids chunked WebDAV uploads that may cause reverse proxy 504 timeouts).
+- Set a non-restrictive client timeout for WebDAV PUT requests to prevent client-side premature aborts on slow connections.
+
 ## [0.1.0-alpha] - 2026-01-14
 ### Added
 - Initial alpha release
