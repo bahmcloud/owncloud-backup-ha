@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 from collections.abc import AsyncIterator, Callable, Coroutine
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from homeassistant.components.backup import (
@@ -14,7 +15,6 @@ from homeassistant.components.backup import (
     BackupAgentError,
     BackupNotFound,
 )
-
 from homeassistant.core import HomeAssistant, callback
 
 from .const import (
@@ -39,8 +39,66 @@ def _make_meta_name(backup_id: str) -> str:
     return f"{TAR_PREFIX}{backup_id}{META_SUFFIX}"
 
 
+def _normalize_backup_dict(d: dict[str, Any]) -> dict[str, Any]:
+    """Normalize backup metadata to satisfy multiple HA schema versions."""
+    d = dict(d)
+
+    # Identity fields (varies by HA versions)
+    d.setdefault("backup_id", d.get("slug", ""))
+    d.setdefault("slug", d.get("backup_id", ""))
+
+    # Presentation fields
+    d.setdefault("name", f"ownCloud backup ({d.get('backup_id') or d.get('slug') or 'unknown'})")
+    d.setdefault("date", d.get("created_at", ""))
+    d.setdefault("size", 0)
+    d.setdefault("protected", False)
+    d.setdefault("compressed", True)
+    d.setdefault("extra_metadata", {})
+
+    # Content selections
+    d.setdefault("addons", [])
+    d.setdefault("folders", [])
+
+    # Older schema booleans
+    d.setdefault("database", True)
+    d.setdefault("homeassistant", True)
+
+    # Newer schema booleans
+    d.setdefault("database_included", d.get("database", True))
+    d.setdefault("homeassistant_included", d.get("homeassistant", True))
+    d.setdefault("addons_included", bool(d.get("addons", [])))
+    d.setdefault("folders_included", bool(d.get("folders", [])))
+
+    # Keep old keys consistent
+    d["database"] = bool(d.get("database_included", True))
+    d["homeassistant"] = bool(d.get("homeassistant_included", True))
+
+    if not isinstance(d.get("addons"), list):
+        d["addons"] = []
+    if not isinstance(d.get("folders"), list):
+        d["folders"] = []
+
+    return d
+
+
+def _agentbackup_to_dict(backup: AgentBackup) -> dict[str, Any]:
+    """Serialize AgentBackup in a HA-version-independent way."""
+    if hasattr(backup, "to_dict"):
+        raw = backup.to_dict()  # type: ignore[assignment]
+    elif hasattr(backup, "as_dict"):
+        raw = backup.as_dict()  # type: ignore[assignment]
+    elif is_dataclass(backup):
+        raw = asdict(backup)
+    else:
+        raw = {k: v for k, v in vars(backup).items() if not k.startswith("_")}
+
+    return _normalize_backup_dict(raw)
+
+
 def _agentbackup_from_dict(d: dict[str, Any]) -> AgentBackup:
-    """Best-effort create AgentBackup across HA versions."""
+    """Create AgentBackup from dict and ensure required keys exist."""
+    d = _normalize_backup_dict(d)
+
     from_dict = getattr(AgentBackup, "from_dict", None)
     if callable(from_dict):
         return from_dict(d)  # type: ignore[misc]
@@ -48,10 +106,7 @@ def _agentbackup_from_dict(d: dict[str, Any]) -> AgentBackup:
 
 
 async def _spool_stream_to_tempfile(stream: AsyncIterator[bytes]) -> tuple[str, int]:
-    """Spool an async byte stream into a temporary file and return (path, size).
-
-    This avoids chunked WebDAV uploads and improves compatibility with reverse proxies.
-    """
+    """Spool an async byte stream into a temporary file and return (path, size)."""
     fd, path = tempfile.mkstemp(prefix="owncloud_backup_", suffix=".tar")
     os.close(fd)
 
@@ -76,7 +131,6 @@ async def _spool_stream_to_tempfile(stream: AsyncIterator[bytes]) -> tuple[str, 
         return path, size
 
     except Exception:
-        # Ensure no leftovers on failure
         try:
             os.remove(path)
         except OSError:
@@ -108,11 +162,7 @@ class OwnCloudBackupAgent(BackupAgent):
         backup: AgentBackup,
         **kwargs: Any,
     ) -> None:
-        """Upload a backup + metadata sidecar.
-
-        To avoid chunked uploads (which often break behind proxies), we spool
-        the stream to a temp file and upload with a Content-Length.
-        """
+        """Upload a backup + metadata sidecar (spooled for non-chunked PUT)."""
         temp_path: str | None = None
         try:
             tar_name = _make_tar_name(backup.backup_id)
@@ -125,8 +175,9 @@ class OwnCloudBackupAgent(BackupAgent):
             # 2) Upload tar file with Content-Length
             await self._client.put_file(tar_name, temp_path, size)
 
-            # 3) Upload metadata JSON (small)
-            meta_bytes = json.dumps(backup.to_dict(), ensure_ascii=False).encode("utf-8")
+            # 3) Upload normalized metadata JSON
+            meta_dict = _agentbackup_to_dict(backup)
+            meta_bytes = json.dumps(meta_dict, ensure_ascii=False).encode("utf-8")
             await self._client.put_bytes(meta_name, meta_bytes)
 
         except Exception as err:  # noqa: BLE001
@@ -148,7 +199,6 @@ class OwnCloudBackupAgent(BackupAgent):
 
             backups: list[AgentBackup] = []
 
-            # 1) Load metadata sidecars (limited concurrency)
             sem = asyncio.Semaphore(5)
 
             async def fetch_meta(meta_name: str) -> None:
@@ -162,7 +212,6 @@ class OwnCloudBackupAgent(BackupAgent):
 
             await asyncio.gather(*(fetch_meta(m) for m in meta_files))
 
-            # 2) Fallback: tar without meta -> synthesize minimal AgentBackup
             known_ids = {b.backup_id for b in backups}
             for tar_name in tar_files:
                 backup_id = tar_name.removeprefix(TAR_PREFIX).removesuffix(TAR_SUFFIX)
@@ -170,13 +219,21 @@ class OwnCloudBackupAgent(BackupAgent):
                     continue
 
                 info = await self._client.stat(tar_name)
-                d = {
-                    "backup_id": backup_id,
-                    "name": f"ownCloud backup ({backup_id})",
-                    "date": info.get("modified_iso", ""),
-                    "size": info.get("size", 0),
-                    "protected": False,
-                }
+                d = _normalize_backup_dict(
+                    {
+                        "backup_id": backup_id,
+                        "name": f"ownCloud backup ({backup_id})",
+                        "date": info.get("modified_iso", ""),
+                        "size": info.get("size", 0),
+                        # conservative defaults:
+                        "database_included": True,
+                        "homeassistant_included": True,
+                        "addons_included": False,
+                        "folders_included": False,
+                        "addons": [],
+                        "folders": [],
+                    }
+                )
                 backups.append(_agentbackup_from_dict(d))
 
             backups.sort(key=lambda b: str(b.date), reverse=True)
@@ -190,7 +247,6 @@ class OwnCloudBackupAgent(BackupAgent):
         meta_name = _make_meta_name(backup_id)
         tar_name = _make_tar_name(backup_id)
 
-        # 1) Try meta
         try:
             raw = await self._client.get_bytes(meta_name)
             d = json.loads(raw.decode("utf-8"))
@@ -200,16 +256,22 @@ class OwnCloudBackupAgent(BackupAgent):
         except Exception as err:  # noqa: BLE001
             raise BackupAgentError(f"Get backup metadata failed: {err}") from err
 
-        # 2) Fallback to tar stat
         try:
             info = await self._client.stat(tar_name)
-            d = {
-                "backup_id": backup_id,
-                "name": f"ownCloud backup ({backup_id})",
-                "date": info.get("modified_iso", ""),
-                "size": info.get("size", 0),
-                "protected": False,
-            }
+            d = _normalize_backup_dict(
+                {
+                    "backup_id": backup_id,
+                    "name": f"ownCloud backup ({backup_id})",
+                    "date": info.get("modified_iso", ""),
+                    "size": info.get("size", 0),
+                    "database_included": True,
+                    "homeassistant_included": True,
+                    "addons_included": False,
+                    "folders_included": False,
+                    "addons": [],
+                    "folders": [],
+                }
+            )
             return _agentbackup_from_dict(d)
         except FileNotFoundError as err:
             raise BackupNotFound(f"Backup not found: {backup_id}") from err
@@ -278,4 +340,3 @@ def async_register_backup_agents_listener(
         hass.data[DATA_BACKUP_AGENT_LISTENERS].remove(listener)
 
     return remove_listener
-
