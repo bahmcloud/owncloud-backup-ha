@@ -14,3 +14,6 @@ DATA_BACKUP_AGENT_LISTENERS = "backup_agent_listeners"
 TAR_PREFIX = "ha_backup_"
 TAR_SUFFIX = ".tar"
 META_SUFFIX = ".json"
+
+# Spooling to temp file to avoid chunked WebDAV uploads
+SPOOL_FLUSH_BYTES = 1024 * 1024  # 1 MiB
