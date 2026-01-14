@@ -1,0 +1,7 @@
+{
+  "name": "owncloud-backup-ha",
+  "content_in_root": false,
+  "render_readme": true,
+  "domains": ["owncloud_backup"],
+  "homeassistant": "2025.1.0"
+}
