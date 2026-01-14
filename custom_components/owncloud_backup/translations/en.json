@@ -1,0 +1,20 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ownCloud Backup (WebDAV)",
+        "description": "Configure ownCloud as a Home Assistant backup location using WebDAV.",
+        "data": {
+          "base_url": "Base URL (e.g. https://cloud.example.com)",
+          "username": "Username",
+          "password": "Password / App password",
+          "backup_path": "Backup folder path (e.g. /HomeAssistant/Backups)",
+          "verify_ssl": "Verify SSL certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect or authenticate. Check URL, credentials, and WebDAV availability."
+    }
+  }
+}
