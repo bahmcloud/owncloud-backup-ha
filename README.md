@@ -56,12 +56,13 @@ backup metadata keys to remain compatible across multiple Home Assistant version
 
 ### Add as a custom repository
 1. In Home Assistant: **HACS → Integrations → ⋮ → Custom repositories**
-2. Add your repository URL
-3. Category: **Integration**
-4. Install **owncloud-backup-ha**
-5. Restart Home Assistant
-
-> This repository includes a `hacs.json` and follows the required `custom_components/` layout.
+2. Add repository URL:
+     ```
+     https://github.com/bahmcloud/owncloud-backup-ha
+     ```
+4. Category: **Integration**
+5. Install **owncloud-backup-ha**
+6. Restart Home Assistant
 
 ---
 
