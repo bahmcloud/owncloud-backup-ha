@@ -4,7 +4,7 @@
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=flat-square)](https://hacs.xyz/)
 [![License](https://img.shields.io/github/license/bahmcloud/owncloud-backup-ha?style=flat-square)](LICENSE)
 
-[![Add to Home Assistant](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=owncloud_backup)
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=bahmcloud&repository=owncloud-backup-ha&category=integration)
 
 Home Assistant custom integration that adds **ownCloud (Classic/Server)** as a **Backup Location / Backup Agent** using the official **WebDAV** interface.
 
