@@ -3,13 +3,14 @@
   "name": "ownCloud Backup (WebDAV)",
   "version": "0.1.1-alpha",
   "documentation": "https://github.com/bahmcloud/owncloud-backup-ha/",
-  "issue_tracker": "https://github.com/bahmcloud/owncloud-backup-ha/",
+  "issue_tracker": "https://github.com/bahmcloud/owncloud-backup-ha/issues",
   "codeowners": ["@bahmcloud"],
   "config_flow": true,
   "integration_type": "service",
   "iot_class": "cloud_push",
   "requirements": []
 }
+
 
 
 
