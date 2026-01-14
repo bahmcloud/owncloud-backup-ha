@@ -245,24 +245,6 @@ class WebDavClient:
             ):
                 return
 
-    async def put_stream(self, name: str, stream: AsyncIterator[bytes]) -> None:
-        """Legacy method: chunked upload. Prefer put_file for better proxy compatibility."""
-        folder = await self._base_folder_url()
-        url = self._file_url(folder, name)
-
-        async def gen():
-            async for chunk in stream:
-                yield chunk
-
-        async with self._session.put(
-            url,
-            data=gen(),
-            headers=self._headers(),
-            raise_for_status=True,
-            timeout=self._timeout_long,
-        ):
-            return
-
     async def get_bytes(self, name: str) -> bytes:
         folder = await self._base_folder_url()
         url = self._file_url(folder, name)
