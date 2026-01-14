@@ -1,4 +1,4 @@
-# Owncloud Backup Homeassistant by René Bachmann
+# owncloud-backup-ha
 
 Home Assistant custom integration that adds **ownCloud (Classic/Server)** as a **Backup Location / Backup Agent** using the official **WebDAV** interface.
 
@@ -8,8 +8,8 @@ This integration allows you to:
 - download and **restore** backups via the Home Assistant UI
 - authenticate using **either** an ownCloud **App Password** (recommended for 2FA) **or** the regular account password
 
-> **Status:** `0.1.0-alpha`  
-> This is an early alpha release. Please test on a non-critical system first.
+> **Status:** `0.2.0`  
+> This release focuses on reliability and compatibility across Home Assistant versions.
 
 ---
 
@@ -27,6 +27,15 @@ This integration allows you to:
 - ✅ Supports **App Password** and **standard login**
 - ✅ English UI & documentation
 - ✅ HACS-ready repository structure
+
+### Upload reliability (important)
+To improve reliability behind reverse proxies and avoid WebDAV timeouts with chunked uploads,
+the integration **spools the backup to a temporary file** and then uploads it with a proper
+**Content-Length** header.
+
+### Home Assistant compatibility
+Home Assistant has evolved its backup metadata schema over time. This integration normalizes
+backup metadata keys to remain compatible across multiple Home Assistant versions.
 
 ---
 
@@ -101,6 +110,15 @@ Home Assistant will download the `.tar` from ownCloud using the Backup Agent API
 
 ## Troubleshooting
 
+### "Upload failed" / HTTP 504 (Gateway Timeout)
+A 504 typically indicates a reverse proxy / gateway timeout (e.g., Nginx/Traefik/Cloudflare).
+This integration uploads with Content-Length (non-chunked) for better compatibility.
+
+If you still see 504:
+- Increase proxy timeouts (e.g. `proxy_read_timeout`, `proxy_send_timeout` in Nginx)
+- Ensure large uploads are allowed (`client_max_body_size` in Nginx)
+- Avoid buffering restrictions for WebDAV endpoints
+
 ### "Cannot connect"
 - Check your **Base URL**
 - Make sure the ownCloud user can access WebDAV
@@ -111,12 +129,6 @@ Home Assistant will download the `.tar` from ownCloud using the Backup Agent API
 - If you use a self-signed certificate, either:
   - install the CA properly, or
   - temporarily disable **Verify SSL** (not recommended for production)
-
-### Missing backups in list
-- Ensure the configured backup folder is correct
-- Check that ownCloud contains either:
-  - `.json` metadata files (preferred), or
-  - `.tar` files (fallback)
 
 ---
 
